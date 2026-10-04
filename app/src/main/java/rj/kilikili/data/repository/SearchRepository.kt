@@ -1,5 +1,6 @@
 package rj.kilikili.data.repository
 
+
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import rj.kilikili.api.apiResultNonNull
@@ -11,11 +12,12 @@ import com.huanli233.biliwebapi.bean.search.SearchResultType
 import javax.inject.Inject
 import javax.inject.Singleton
 
+
 @Singleton
 class SearchRepository @Inject constructor() {
-    
+
     private val gson = Gson()
-    
+
     suspend fun searchAll(
         keyword: String,
         page: Int = 1
@@ -24,7 +26,7 @@ class SearchRepository @Inject constructor() {
             searchAll(keyword, page)
         }.apiResultNonNull()
     }
-    
+
     suspend fun searchVideos(
         keyword: String,
         page: Int = 1
@@ -35,7 +37,7 @@ class SearchRepository @Inject constructor() {
             parseSearchResult(result, "video")
         }
     }
-    
+
     suspend fun searchUsers(
         keyword: String,
         page: Int = 1
@@ -46,7 +48,7 @@ class SearchRepository @Inject constructor() {
             parseSearchResult(result, "bili_user")
         }
     }
-    
+
     suspend fun searchArticles(
         keyword: String,
         page: Int = 1
@@ -57,7 +59,7 @@ class SearchRepository @Inject constructor() {
             parseSearchResult(result, "article")
         }
     }
-    
+
     suspend fun searchLive(
         keyword: String,
         page: Int = 1
@@ -68,25 +70,35 @@ class SearchRepository @Inject constructor() {
             parseSearchResult(result, "live")
         }
     }
-    
+
     private fun parseSearchResult(searchResult: SearchResult, targetType: String): List<SearchItem> {
         val result = searchResult.result ?: return emptyList()
-        
+
         return when (result) {
-            is List<*> -> {
-                val json = gson.toJson(result)
+            is Map<*, *> -> {
+                val items = result[targetType] ?: return emptyList()
+                val json = gson.toJson(items)
                 val type = object : TypeToken<List<SearchItem>>() {}.type
                 gson.fromJson(json, type) ?: emptyList()
             }
-            else -> {
-                val json = gson.toJson(result)
-                val type = object : TypeToken<List<SearchResultType>>() {}.type
-                val resultTypes: List<SearchResultType> = gson.fromJson(json, type) ?: emptyList()
-                resultTypes.firstOrNull { it.resultType == targetType }?.data ?: emptyList()
+            is List<*> -> {
+                val first = result.firstOrNull()
+                if (first is Map<*, *>) {
+                    val items = first[targetType] ?: return emptyList()
+                    val json = gson.toJson(items)
+                    val type = object : TypeToken<List<SearchItem>>() {}.type
+                    gson.fromJson(json, type) ?: emptyList()
+                } else {
+                    val json = gson.toJson(result)
+                    val type = object : TypeToken<List<SearchResultType>>() {}.type
+                    val resultTypes: List<SearchResultType> = gson.fromJson(json, type) ?: emptyList()
+                    resultTypes.firstOrNull { it.resultType == targetType }?.data ?: emptyList()
+                }
             }
+            else -> emptyList()
         }
     }
-    
+
     suspend fun getSearchSuggestions(term: String): Result<List<String>> {
         return runCatching {
             val response = bilibiliApi.getApi(ISearchApi::class.java).getSearchSuggestions(term)
